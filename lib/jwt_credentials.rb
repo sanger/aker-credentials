@@ -6,7 +6,6 @@ module JWTCredentials
 
   def self.included(base)
     base.instance_eval do |klass|
-      #include JWTCredentials:Checks
       before_action :check_credentials
       before_action :apply_credentials
     end
@@ -20,17 +19,14 @@ module JWTCredentials
   end
 
   def build_user_session(hash)
-    #debugger    
     if defined? User
       session['user'] = User.from_jwt_data(hash)
-      #session['user'] = User.new(hash)
     else
       session['user'] = OpenStruct.new(hash)
     end    
   end
 
   def check_credentials
-    #debugger
     if request.headers.to_h['HTTP_X_AUTHORISATION']
       begin
         secret_key = Rails.configuration.jwt_secret_key
@@ -38,15 +34,6 @@ module JWTCredentials
         payload, header = JWT.decode token, secret_key, true, { algorithm: 'HS256'}
         ud = payload["data"]
         build_user_session(ud)
-        #if defined? User
-        #  session['user'] = User.new(ud['user'])
-        #else
-        #  session['user'] = OpenStruct.new(ud['user'])
-        #end
-        #session["user"] = {
-        #  "user" => ud["user"], #User.find_or_create_by(email: ud["user"]["email"]),
-        #  "groups" => ["world"]#ud["groups"].join(',') #ud["groups"].map { |name| Group.find_or_create_by(name: name) },
-        #}
 
       rescue JWT::VerificationError => e
         render body: nil, status: :unauthorized
