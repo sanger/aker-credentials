@@ -20,9 +20,6 @@ module JWTCredentials
   end
 
   def apply_credentials
-    if current_user
-      session['user'] = current_user
-    end
     RequestStore.store[:x_authorisation] = session['user']
   end
 
@@ -50,11 +47,7 @@ module JWTCredentials
         render body: nil, status: :unauthorized
       end
     else
-      if current_user
-        session['user'] = current_user
-      else
-        build_user_session("email" => 'guest', "groups" => ['world'])
-      end
+      build_user_session("email" => 'guest', "groups" => ['world'])
     end
   end  
 end
