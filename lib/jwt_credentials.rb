@@ -12,40 +12,39 @@ module JWTCredentials
   end
 
   def apply_credentials
-    if current_user
-      session['user'] = current_user
-    end
-    RequestStore.store[:x_authorisation] = session['user']
+    RequestStore.store[:x_authorisation] = current_user
   end
 
-  def build_user_session(hash)
+  def build_user(hash)
     if defined? User
-      session['user'] = User.from_jwt_data(hash)
+      @x_auth_user = User.from_jwt_data(hash)
     else
-      session['user'] = OpenStruct.new(hash)
-    end    
+      @x_auth_user = OpenStruct.new(hash)
+    end
+  end
+
+  # Override this for cases where the user credentials come from elsewhere,
+  #  e.g. a login session
+  def current_user
+    @x_auth_user
   end
 
   def check_credentials
+    @x_auth_user = nil
     if request.headers.to_h['HTTP_X_AUTHORISATION']
       begin
         secret_key = Rails.configuration.jwt_secret_key
         token = request.headers.to_h['HTTP_X_AUTHORISATION']
         payload, header = JWT.decode token, secret_key, true, { algorithm: 'HS256'}
         ud = payload["data"]
-        build_user_session(ud)
-
+        build_user(ud)
       rescue JWT::VerificationError => e
         render body: nil, status: :unauthorized
       rescue JWT::ExpiredSignature => e
         render body: nil, status: :unauthorized
       end
     else
-      if current_user
-        session['user']=current_user
-      else
-        build_user_session("email" => 'guest', "groups" => ['world'])
-      end
+      build_user("email" => 'guest', "groups" => ['world'])
     end
   end  
 end
