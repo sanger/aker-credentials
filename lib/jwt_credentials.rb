@@ -11,6 +11,16 @@ module JWTCredentials
     end
   end
 
+  attr_reader :x_auth_user
+
+  def current_user
+    if respond_to?(:auth_user)
+      auth_user || x_auth_user
+    else
+      x_auth_user
+    end
+  end
+
   def apply_credentials
     RequestStore.store[:x_authorisation] = current_user
   end
@@ -21,12 +31,6 @@ module JWTCredentials
     else
       @x_auth_user = OpenStruct.new(hash)
     end
-  end
-
-  # Override this for cases where the user credentials come from elsewhere,
-  #  e.g. a login session
-  def current_user
-    @x_auth_user
   end
 
   def check_credentials
