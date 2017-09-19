@@ -49,8 +49,10 @@ module JWTCredentials
       end
     elsif Rails.configuration.respond_to? :default_jwt_user
       build_user(Rails.configuration.default_jwt_user)
-    else
-      build_user("email" => 'guest', "groups" => ['world'])
     end
-  end  
+  end
+
+  def jwt_provided?
+    x_auth_user.present?
+  end
 end
