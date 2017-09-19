@@ -47,6 +47,8 @@ module JWTCredentials
       rescue JWT::ExpiredSignature => e
         render body: nil, status: :unauthorized
       end
+    elsif Rails.configuration.respond_to? :default_jwt_user
+      build_user(Rails.configuration.default_jwt_user)
     else
       build_user("email" => 'guest', "groups" => ['world'])
     end
