@@ -6,8 +6,13 @@ class JWTSerializer < Faraday::Middleware
 
   def call(env)
     #debugger
-    token = JWTSerializer.generate_jwt(RequestStore.store[:x_authorisation])
-    env[:request_headers]["X-Authorisation"] = token
+    user_info = RequestStore.store[:x_authorisation]
+    if user_info
+      token = JWTSerializer.generate_jwt(user_info)
+      env[:request_headers]["X-Authorisation"] = token
+    else
+      env[:request_headers].delete("X-Authorisation")
+    end
     @app.call(env)
   end
 
