@@ -1,6 +1,7 @@
 require 'jwt'
 require 'ostruct'
 require 'request_store'
+require 'jwt_serializer'
 
 module JWTCredentials
 
@@ -35,18 +36,27 @@ module JWTCredentials
 
   def check_credentials
     @x_auth_user = nil
+    # JWT present in header (microservices or current SSO)
     if request.headers.to_h['HTTP_X_AUTHORISATION']
       begin
-        secret_key = Rails.configuration.jwt_secret_key
-        token = request.headers.to_h['HTTP_X_AUTHORISATION']
-        payload, header = JWT.decode token, secret_key, true, { algorithm: 'HS256'}
-        ud = payload["data"]
-        build_user(ud)
+        user_from_jwt(request.headers.to_h['HTTP_X_AUTHORISATION'])
       rescue JWT::VerificationError => e
         render body: nil, status: :unauthorized
       rescue JWT::ExpiredSignature => e
         render body: nil, status: :unauthorized
       end
+    # JWT present in cookie (front-end services aka new SSO)
+    elsif cookies[:aker_user]
+      begin
+        user_from_jwt(cookies[:aker_user])
+      rescue JWT::VerificationError => e
+        # Potential hacking attempt so log this?
+        render body: "JWT in cookie, VerificationError", status: :unauthorized
+      rescue JWT::ExpiredSignature => e
+        # This should refresh token?
+        render body: "JWT from cookie has expired", status: :unauthorized
+      end
+    # Fake JWT User for development
     elsif Rails.configuration.respond_to? :default_jwt_user
       build_user(Rails.configuration.default_jwt_user)
     end
@@ -54,5 +64,11 @@ module JWTCredentials
 
   def jwt_provided?
     x_auth_user.present?
+  end
+
+  def user_from_jwt(jwt_container)
+    secret_key = Rails.configuration.jwt_secret_key
+    payload, header = JWT.decode jwt_container, secret_key, true, { algorithm: 'HS256'}
+    build_user(payload["data"])
   end
 end
