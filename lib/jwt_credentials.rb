@@ -50,11 +50,20 @@ module JWTCredentials
       begin
         user_from_jwt(cookies[:aker_user])
       rescue JWT::VerificationError => e
-        # Potential hacking attempt so log this?
-        render body: "JWT in cookie, VerificationError", status: :unauthorized
+        # TODO: Potential hacking attempt so log this?
+        render body: "JWT in cookie has failed verification", status: :unauthorized
       rescue JWT::ExpiredSignature => e
-        # This should refresh token?
-        render body: "JWT from cookie has expired", status: :unauthorized
+        # Request a new JWT from the auth service
+        conn = Faraday.new(:url => 'http://localhost:4321')
+        response = conn.post do |req|
+          req.url '/renew_jwt'
+          # Send the long-term session cookie to the auth service
+          # Currently contains user email and groups
+          req.body = cookies[:aker_auth_session]
+        end
+        # Update the JWT Cookie to containt the new JWT
+        cookies[:aker_user] = response.body
+        redirect_to ("http://localhost:4321/?status=" + response.status.to_s)
       end
     # Fake JWT User for development
     elsif Rails.configuration.respond_to? :default_jwt_user
