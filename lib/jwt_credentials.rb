@@ -79,7 +79,7 @@ module JWTCredentials
     conn = Faraday.new(url: 'http://localhost:4321')
     response = conn.post do |req|
       req.url '/renew_jwt'
-      req.body = JSON.generate({ email: cookies.encrypted[:aker_auth_session]['email'], groups: cookies.encrypted[:aker_auth_session]['groups'] })
+      req.body = cookies.encrypted[:aker_auth_session]['email']
     end
     # Update the JWT Cookie to contain the new JWT
     if response.body.present?
