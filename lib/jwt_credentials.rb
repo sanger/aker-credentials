@@ -27,11 +27,11 @@ module JWTCredentials
   end
 
   def build_user(hash)
-    if defined? User
-      @x_auth_user = User.from_jwt_data(hash)
-    else
-      @x_auth_user = OpenStruct.new(hash)
-    end
+    @x_auth_user = if defined? User
+                     User.from_jwt_data(hash)
+                   else
+                     OpenStruct.new(hash)
+                   end
   end
 
   def check_credentials
@@ -45,26 +45,19 @@ module JWTCredentials
       rescue JWT::ExpiredSignature => e
         render body: nil, status: :unauthorized
       end
-    # JWT present in cookie (front-end services aka new SSO)
-    elsif cookies[:aker_user]
+    # JWT present in cookie (front-end services on new SSO) as well as logged in auth session
+  elsif cookies[:aker_user_jwt] && cookies.encrypted[:aker_auth_session]['email']
       begin
-        user_from_jwt(cookies[:aker_user])
+        user_from_jwt(cookies[:aker_user_jwt])
       rescue JWT::VerificationError => e
         # TODO: Potential hacking attempt so log this?
-        render body: "JWT in cookie has failed verification", status: :unauthorized
+        render body: 'JWT in cookie has failed verification', status: :unauthorized
       rescue JWT::ExpiredSignature => e
-        # Request a new JWT from the auth service
-        conn = Faraday.new(:url => 'http://localhost:4321')
-        response = conn.post do |req|
-          req.url '/renew_jwt'
-          # Send the long-term session cookie to the auth service
-          # Currently contains user email and groups
-          req.body = cookies[:aker_auth_session]
-        end
-        # Update the JWT Cookie to containt the new JWT
-        cookies[:aker_user] = response.body
-        redirect_to ("http://localhost:4321/?status=" + response.status.to_s)
+        request_jwt
       end
+    # Logged has logged in auth service session, no JWT, so try get one
+  elsif cookies.encrypted[:aker_auth_session]['email']
+      request_jwt
     # Fake JWT User for development
     elsif Rails.configuration.respond_to? :default_jwt_user
       build_user(Rails.configuration.default_jwt_user)
@@ -77,7 +70,23 @@ module JWTCredentials
 
   def user_from_jwt(jwt_container)
     secret_key = Rails.configuration.jwt_secret_key
-    payload, header = JWT.decode jwt_container, secret_key, true, { algorithm: 'HS256'}
-    build_user(payload["data"])
+    payload, header = JWT.decode jwt_container, secret_key, true, algorithm: 'HS256'
+    build_user(payload['data'])
   end
+
+  def request_jwt
+    # Request a new JWT from the auth service
+    conn = Faraday.new(url: 'http://localhost:4321')
+    response = conn.post do |req|
+      req.url '/renew_jwt'
+      req.body = JSON.generate({ email: cookies.encrypted[:aker_auth_session]['email'], groups: cookies.encrypted[:aker_auth_session]['groups'] })
+    end
+    # Update the JWT Cookie to contain the new JWT
+    if response.body.present?
+      cookies[:aker_user_jwt] = response.body
+    end
+    # Redirect user back to the URL they were trying to get access
+    redirect_to request.original_url
+  end
+
 end
