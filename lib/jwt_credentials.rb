@@ -36,8 +36,8 @@ module JWTCredentials
 
   def check_credentials
     @x_auth_user = nil
-    # JWT present in header (microservices or current SSO)
     if request.headers.to_h['HTTP_X_AUTHORISATION']
+      # JWT present in header (microservices or current SSO)
       begin
         user_from_jwt(request.headers.to_h['HTTP_X_AUTHORISATION'])
       rescue JWT::VerificationError => e
@@ -45,21 +45,22 @@ module JWTCredentials
       rescue JWT::ExpiredSignature => e
         render body: nil, status: :unauthorized
       end
-    # JWT present in cookie (front-end services on new SSO) as well as logged in auth session
-  elsif cookies[:aker_user_jwt] && cookies.encrypted[:aker_auth_session]['email']
+    elsif cookies[:aker_user_jwt]
+      # JWT present in cookie (front-end services on new SSO)
       begin
         user_from_jwt(cookies[:aker_user_jwt])
       rescue JWT::VerificationError => e
-        # TODO: Potential hacking attempt so log this?
-        render body: 'JWT in cookie has failed verification', status: :unauthorized
+        # Potential hacking attempt so log this
+        jwt = JWT.decode cookies[:aker_user_jwt], '', false, algorithm: 'HS256'
+        Rails.logger.warn("JWT verification failed from #{request.ip}, JWT: #{jwt}")
+        cookies.delete :aker_auth_session
+        cookies.delete :aker_user_jwt
+        redirect_to "http://localhost:4321/login"
       rescue JWT::ExpiredSignature => e
         request_jwt
       end
-    # Logged has logged in auth service session, no JWT, so try get one
-  elsif cookies.encrypted[:aker_auth_session]['email']
-      request_jwt
-    # Fake JWT User for development
     elsif Rails.configuration.respond_to? :default_jwt_user
+      # Fake JWT User for development
       build_user(Rails.configuration.default_jwt_user)
     end
   end
@@ -77,16 +78,20 @@ module JWTCredentials
   def request_jwt
     # Request a new JWT from the auth service
     conn = Faraday.new(url: 'http://localhost:4321')
-    response = conn.post do |req|
+    auth_response = conn.post do |req|
       req.url '/renew_jwt'
-      req.body = cookies.encrypted[:aker_auth_session]['email']
+      req.headers['Cookie'] = "aker_auth_session=#{cookies[:aker_auth_session]}"
     end
-    # Update the JWT Cookie to contain the new JWT
-    if response.body.present?
-      cookies[:aker_user_jwt] = response.body
+    if auth_response.status == 200
+      # Update the JWT Cookie to contain the new JWT
+      # Ensures cookies returned by request to auth service are actually set
+      response.headers['set-cookie'] = auth_response.headers['set-cookie']
+      # Redirect user back to the URL they were trying to get access
+      redirect_to request.original_url
+    else
+      # Otherwise must log in
+      redirect_to "http://localhost:4321/login"
     end
-    # Redirect user back to the URL they were trying to get access
-    redirect_to request.original_url
   end
 
 end
