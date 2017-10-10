@@ -53,15 +53,17 @@ module JWTCredentials
         # Potential hacking attempt so log this
         jwt = JWT.decode cookies[:aker_user_jwt], '', false, algorithm: 'HS256'
         Rails.logger.warn("JWT verification failed from #{request.ip}, JWT: #{jwt}")
+        # Then delete their cookies
         cookies.delete :aker_auth_session
         cookies.delete :aker_user_jwt
-        redirect_to "http://localhost:4321/login"
+        # TODO: expire their session in the database
+        redirect_to login_url
       rescue JWT::ExpiredSignature => e
         request_jwt
       end
-    elsif Rails.configuration.respond_to? :default_jwt_user
+    elsif default_user
       # Fake JWT User for development
-      build_user(Rails.configuration.default_jwt_user)
+      build_user(default_user)
     end
   end
 
@@ -70,14 +72,13 @@ module JWTCredentials
   end
 
   def user_from_jwt(jwt_container)
-    secret_key = Rails.configuration.jwt_secret_key
     payload, header = JWT.decode jwt_container, secret_key, true, algorithm: 'HS256'
     build_user(payload['data'])
   end
 
   def request_jwt
     # Request a new JWT from the auth service
-    conn = Faraday.new(url: 'http://localhost:4321')
+    conn = Faraday.new(url: auth_service_url)
     auth_response = conn.post do |req|
       req.url '/renew_jwt'
       req.headers['Cookie'] = "aker_auth_session=#{cookies[:aker_auth_session]}"
@@ -89,9 +90,28 @@ module JWTCredentials
       # Redirect user back to the URL they were trying to get access
       redirect_to request.original_url
     else
-      # Otherwise must log in
-      redirect_to "http://localhost:4321/login"
+      redirect_to login_url
     end
+  end
+
+  def login_url
+    Rails.configuration.login_url
+  end
+
+  def default_user
+    if Rails.configuration.respond_to? :default_jwt_user
+      Rails.configuration.default_jwt_user
+    else
+      nil
+    end
+  end
+
+  def secret_key
+    Rails.configuration.jwt_secret_key
+  end
+
+  def auth_service_url
+    "http://localhost:4321"
   end
 
 end
