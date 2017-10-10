@@ -3,94 +3,149 @@ require 'active_support/time'
 require 'faraday'
 
 RSpec.describe AkerCredentialsGem do
-  let(:rails) { double('Rails') }
-
-  let(:credentials_class) do
-     class Credentials_Class
-       def self.before_action(symbol)
-       end
-       def Rails
-         rails
-       end
-       include JWTCredentials
-     end
+  let(:rails) { double('Rails', logger: logger, configuration: config) }
+  let(:logger) do
+    log = double('Logger')
+    allow(log).to receive(:warn)
+    log
   end
 
-  before(:all) do
-    @secret_key = "top_secret"
-    @user_hash = {"email"=>"test@sanger.ac.uk", "groups"=>["world"]}
+  let(:config) { double('config', login_url: 'http://loginurl') }
+  let(:request) { double('request', headers: {}, ip: '1', original_url: 'http://originalurl') }
+  let(:jwt_key) { 'top_secret' }
+  let(:userhash) { {"email"=>"test@sanger.ac.uk", "groups"=>["world"] } }
 
+  let(:valid_jwt) do
     iat = Time.now.to_i
-    exp = Time.now.to_i + 3600
-    nbf = Time.now.to_i - 5
+    exp = iat + 3600
+    nbf = iat - 5
+    payload = {
+      data: userhash, iat: iat, exp: exp, nbf: nbf
+    }
+    JWT.encode payload, jwt_key, 'HS256'
+  end
+  let(:expired_jwt) do
+    iat = Time.now.to_i-10
+    exp = iat + 5
+    nbf = iat - 5
+    payload = {
+      data: userhash, iat: iat, exp: exp, nbf: nbf
+    }
+    JWT.encode payload, jwt_key, 'HS256'
+  end
+  let(:invalid_jwt) do
+    iat = Time.now.to_i
+    exp = iat + 3600
+    nbf = iat - 5
+    payload = {
+      data: userhash, iat: iat, exp: exp, nbf: nbf
+    }
+    JWT.encode payload, 'wrong_key', 'HS256'
+  end
+  let(:cookies) { {} }
 
-    valid_data = { data: @user_hash,
-                   exp: exp,
-                   nbf: nbf,
-                   iat: iat }
-
-    expired_data = { data: @user_hash,
-                     exp: (Time.now - 1.seconds),
-                     nbf: (Time.now - 35.seconds),
-                     iat: (Time.now - 30.seconds) }
-
-    @valid_jwt = JWT.encode valid_data, @secret_key, 'HS256'
-    @tampered_jwt = JWT.encode valid_data, "wrong_key", 'HS256'
-    @expired_jwt = JWT.encode expired_data, @secret_key, 'HS256'
+  class CredentialsClass
+    def self.before_action(symbol)
+    end
+    include JWTCredentials
   end
 
-  before(:each) do
-    @credentials_instance = credentials_class.new
-    request = double('request', headers: nil)
-    allow(@credentials_instance).to receive(:request).and_return(request)
-    allow(@credentials_instance).to receive(:secret_key).and_return(@secret_key)
+  let(:credentials_instance) { CredentialsClass.new }
+
+  before do
+    allow(config).to receive(:jwt_secret_key).and_return jwt_key
+    allow(credentials_instance).to receive(:cookies).and_return(cookies)
+    allow(credentials_instance).to receive(:request).and_return(request)
+    stub_const('Rails', rails)
   end
 
-  it "requests a JWT to replace an expired one" do
-    cookies = {aker_user_jwt: @expired_jwt}
-    allow(@credentials_instance).to receive(:cookies).and_return(cookies)
+  describe(:check_credentials) do
+    context 'when the JWT is valid' do
+      let(:cookies) { { aker_user_jwt: valid_jwt } }
+      it 'extracts the user' do
+        credentials_instance.check_credentials
+        x = credentials_instance.x_auth_user
+        expect(x).not_to be_nil
+        expect(x.email).to eq(userhash["email"])
+      end
+    end
 
-    # The following exception shows an attempt at sending a request to the auth service
-    expect {@credentials_instance.check_credentials}.to raise_exception(Faraday::ConnectionFailed)
+    context 'when the JWT has expired' do
+      let(:cookies) { { aker_user_jwt: expired_jwt } }
+      before do
+        allow(credentials_instance).to receive(:request_jwt)
+        credentials_instance.check_credentials
+      end
+      it 'calls request_jwt' do
+        expect(credentials_instance).to have_received(:request_jwt)
+      end
+      it 'does not store the user' do
+        expect(credentials_instance.x_auth_user).to be_nil
+      end
+    end
+
+    context 'when the JWT is invalid' do
+      let(:cookies) { { aker_user_jwt: invalid_jwt } }
+
+      before do
+        allow(credentials_instance).to receive(:redirect_to)
+        allow(cookies).to receive(:delete)
+        credentials_instance.check_credentials
+      end
+      it 'logs a warning' do
+        expect(logger).to have_received(:warn)
+      end
+      it 'redirects to login url' do
+        expect(credentials_instance).to have_received(:redirect_to).with(config.login_url)
+      end
+      it 'deletes the cookies' do
+        expect(cookies).to have_received(:delete).with(:aker_auth_session)
+        expect(cookies).to have_received(:delete).with(:aker_user_jwt)
+      end
+      it 'does not store the user' do
+        expect(credentials_instance.x_auth_user).to be_nil
+      end
+    end
+
   end
 
-  it "doesn't generate a user from a tampered_jwt" do
-    cookies = {aker_user_jwt: @tampered_jwt}
-    allow(@credentials_instance).to receive(:cookies).and_return(cookies)
-
-    @credentials_instance.check_credentials
-  end
-
-  it "redirects a user with no JWT (or session) cookie to login" do
-    cookies = {}
-    allow(@credentials_instance).to receive(:cookies).and_return(cookies)
-    @credentials_instance.check_credentials
-  end
-
-  it "accepts a valid JWT" do
-    cookies = {aker_user_jwt: @valid_jwt}
-    allow(@credentials_instance).to receive(:cookies).and_return(cookies)
-
-    # Ensures the user respresented by @valid_jwt is returned
-    expect(@credentials_instance.check_credentials).to eq(OpenStruct.new(@user_hash))
-  end
-
-  context 'the thing' do
-    let(:logger) { double('Logger') }
+  describe(:request_jwt) do
+    let(:conn) { double("Faraday") }
+    let(:cookie_data) { '[cookie data]'}
+    let(:auth_response) { double('auth response', status: auth_status, headers: { 'set-cookie' => cookie_data}) }
+    let(:response) { double('response', headers: headers)}
+    let(:headers) { {} }
     before do
-      allow(rails).to receive(:logger).and_return(logger)
-      allow(logger).to receive(:warn)
+      allow(credentials_instance).to receive(:redirect_to)
+      allow(credentials_instance).to receive(:response).and_return(response)
+      allow(Faraday).to receive(:new).and_return(conn)
+      allow(conn).to receive(:post).and_return(auth_response)
+      credentials_instance.request_jwt
     end
 
-    it '...' do
+    context 'when the request succeeds' do
+      let(:auth_status) { 200 }
 
-      ....
+      it 'sends back a cookie' do
+        expect(headers['set-cookie']).to eq(cookie_data)
+      end
 
-      expect(logger).to have_received(:warn).with(...)
-
+      it 'redirects to the original url' do
+        expect(credentials_instance).to have_received(:redirect_to).with(request.original_url)
+      end
     end
+
+    context 'when the request fails' do
+      let(:auth_status) { 401 }
+
+      it 'does not send back a cookie' do
+        expect(headers['set-cookie']).to be_nil
+      end
+
+      it 'redirects to the login page' do
+        expect(credentials_instance).to have_received(:redirect_to).with(config.login_url)
+      end
+    end
+
   end
-
-
-
 end
