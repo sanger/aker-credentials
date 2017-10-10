@@ -1,5 +1,4 @@
 require 'spec_helper'
-require 'active_support/time'
 require 'faraday'
 
 RSpec.describe JWTCredentials do
