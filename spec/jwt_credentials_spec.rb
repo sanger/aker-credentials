@@ -2,7 +2,7 @@ require 'spec_helper'
 require 'active_support/time'
 require 'faraday'
 
-RSpec.describe AkerCredentialsGem do
+RSpec.describe JWTCredentials do
   let(:rails) { double('Rails', logger: logger, configuration: config) }
   let(:logger) do
     log = double('Logger')
