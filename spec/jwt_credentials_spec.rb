@@ -10,38 +10,25 @@ RSpec.describe JWTCredentials do
     log
   end
 
-  let(:config) { double('config', login_url: 'http://loginurl', auth_service_url: 'http://authserviceurl') }
+  let(:config) { double('config', login_url: 'http://loginurl', auth_service_url: 'http://authserviceurl', jwt_secret_key: jwt_key) }
   let(:request) { double('request', headers: {}, ip: '1', original_url: 'http://originalurl') }
   let(:jwt_key) { 'top_secret' }
   let(:userhash) { {"email"=>"test@sanger.ac.uk", "groups"=>["world"] } }
 
-  let(:valid_jwt) do
-    iat = Time.now.to_i
-    exp = iat + 3600
+  def make_jwt(time_offset, key)
+    iat = Time.now.to_i + time_offset
     nbf = iat - 5
-    payload = {
-      data: userhash, iat: iat, exp: exp, nbf: nbf
-    }
-    JWT.encode payload, jwt_key, 'HS256'
-  end
-  let(:expired_jwt) do
-    iat = Time.now.to_i-10
     exp = iat + 5
-    nbf = iat - 5
     payload = {
       data: userhash, iat: iat, exp: exp, nbf: nbf
     }
-    JWT.encode payload, jwt_key, 'HS256'
+    JWT.encode payload, key, 'HS256'
   end
-  let(:invalid_jwt) do
-    iat = Time.now.to_i
-    exp = iat + 3600
-    nbf = iat - 5
-    payload = {
-      data: userhash, iat: iat, exp: exp, nbf: nbf
-    }
-    JWT.encode payload, 'wrong_key', 'HS256'
-  end
+
+  let(:valid_jwt) { make_jwt(0, jwt_key) }
+  let(:expired_jwt) { make_jwt(-30, jwt_key) }
+  let(:invalid_jwt) { make_jwt(0, 'wrong_key') }
+
   let(:cookies) { {} }
 
   class CredentialsClass
@@ -53,7 +40,6 @@ RSpec.describe JWTCredentials do
   let(:credentials_instance) { CredentialsClass.new }
 
   before do
-    allow(config).to receive(:jwt_secret_key).and_return jwt_key
     allow(credentials_instance).to receive(:cookies).and_return(cookies)
     allow(credentials_instance).to receive(:request).and_return(request)
     stub_const('Rails', rails)
