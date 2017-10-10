@@ -56,7 +56,6 @@ module JWTCredentials
         # Then delete their cookies
         cookies.delete :aker_auth_session
         cookies.delete :aker_user_jwt
-        # TODO: expire their session in the database
         redirect_to login_url
       rescue JWT::ExpiredSignature => e
         request_jwt
