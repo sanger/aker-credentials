@@ -10,7 +10,7 @@ RSpec.describe AkerCredentialsGem do
     log
   end
 
-  let(:config) { double('config', login_url: 'http://loginurl') }
+  let(:config) { double('config', login_url: 'http://loginurl', auth_service_url: 'http://authserviceurl') }
   let(:request) { double('request', headers: {}, ip: '1', original_url: 'http://originalurl') }
   let(:jwt_key) { 'top_secret' }
   let(:userhash) { {"email"=>"test@sanger.ac.uk", "groups"=>["world"] } }

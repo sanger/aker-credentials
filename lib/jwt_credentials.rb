@@ -111,7 +111,7 @@ module JWTCredentials
   end
 
   def auth_service_url
-    "http://localhost:4321"
+    Rails.configuration.auth_service_url
   end
 
 end
