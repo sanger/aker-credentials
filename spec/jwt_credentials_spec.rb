@@ -97,7 +97,7 @@ RSpec.describe JWTCredentials do
   describe(:request_jwt) do
     let(:conn) { double("Faraday") }
     let(:cookie_data) { '[cookie data]'}
-    let(:auth_response) { double('auth response', status: auth_status, headers: { 'set-cookie' => cookie_data}) }
+    let(:auth_response) { double('auth response', status: auth_status, body: valid_jwt, headers: { 'set-cookie' => cookie_data}) }
     let(:response) { double('response', headers: headers)}
     let(:headers) { {} }
     before do
@@ -115,8 +115,9 @@ RSpec.describe JWTCredentials do
         expect(headers['set-cookie']).to eq(cookie_data)
       end
 
-      it 'redirects to the original url' do
-        expect(credentials_instance).to have_received(:redirect_to).with(request.original_url)
+      it 'processes the jwt' do
+        expect(credentials_instance.x_auth_user).not_to be_nil
+        expect(credentials_instance.x_auth_user.email).to eq(userhash['email'])
       end
     end
 

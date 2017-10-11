@@ -86,8 +86,15 @@ module JWTCredentials
       # Update the JWT Cookie to contain the new JWT
       # Ensures cookies returned by request to auth service are actually set
       response.headers['set-cookie'] = auth_response.headers['set-cookie']
-      # Redirect user back to the URL they were trying to get access
-      redirect_to request.original_url
+      # Read the jwt from the auth response and carry on with the original request
+      coded_jwt = auth_response.body
+      begin
+        user_from_jwt(coded_jwt)
+      rescue JWT::VerificationError => e
+        render body: nil, status: :unauthorized
+      rescue JWT::ExpiredSignature => e
+        render body: nil, status: :unauthorized
+      end
     else
       redirect_to login_url
     end
