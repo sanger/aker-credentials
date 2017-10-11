@@ -1,5 +1,7 @@
 require 'spec_helper'
 require 'faraday'
+require 'active_support'
+require 'active_support/core_ext'
 
 RSpec.describe JWTCredentials do
   let(:rails) { double('Rails', logger: logger, configuration: config) }
@@ -11,6 +13,7 @@ RSpec.describe JWTCredentials do
 
   let(:config) { double('config', login_url: 'http://loginurl', auth_service_url: 'http://authserviceurl', jwt_secret_key: jwt_key) }
   let(:request) { double('request', headers: {}, ip: '1', original_url: 'http://originalurl') }
+  let(:login_url_with_parameters) { config.login_url+'?'+{redirect_url: request.original_url}.to_query }
   let(:jwt_key) { 'top_secret' }
   let(:userhash) { {"email"=>"test@sanger.ac.uk", "groups"=>["world"] } }
 
@@ -80,8 +83,8 @@ RSpec.describe JWTCredentials do
       it 'logs a warning' do
         expect(logger).to have_received(:warn)
       end
-      it 'redirects to login url' do
-        expect(credentials_instance).to have_received(:redirect_to).with(config.login_url)
+      it 'redirects to the login page' do
+        expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
       end
       it 'deletes the cookies' do
         expect(cookies).to have_received(:delete).with(:aker_auth_session)
@@ -129,7 +132,7 @@ RSpec.describe JWTCredentials do
       end
 
       it 'redirects to the login page' do
-        expect(credentials_instance).to have_received(:redirect_to).with(config.login_url)
+        expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
       end
     end
 

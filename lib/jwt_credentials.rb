@@ -2,6 +2,8 @@ require 'jwt'
 require 'ostruct'
 require 'request_store'
 require 'jwt_serializer'
+require 'active_support'
+require 'active_support/core_ext'
 
 module JWTCredentials
 
@@ -63,6 +65,8 @@ module JWTCredentials
     elsif default_user
       # Fake JWT User for development
       build_user(default_user)
+    else
+      redirect_to login_url
     end
   end
 
@@ -101,7 +105,10 @@ module JWTCredentials
   end
 
   def login_url
-    Rails.configuration.login_url
+    params = {
+      redirect_url: request.original_url
+    }
+    Rails.configuration.login_url+'?'+params.to_query
   end
 
   def default_user
