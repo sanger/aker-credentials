@@ -36,6 +36,10 @@ RSpec.describe JWTCredentials do
   class CredentialsClass
     def self.before_action(symbol)
     end
+    attr_accessor :action_name
+    def action_name
+      @action_name || 'some_action'
+    end
     include JWTCredentials
   end
 
@@ -44,6 +48,7 @@ RSpec.describe JWTCredentials do
   before do
     allow(credentials_instance).to receive(:cookies).and_return(cookies)
     allow(credentials_instance).to receive(:request).and_return(request)
+    allow(credentials_instance).to receive(:redirect_to)
     stub_const('Rails', rails)
   end
 
@@ -56,6 +61,10 @@ RSpec.describe JWTCredentials do
         expect(x).not_to be_nil
         expect(x.email).to eq(userhash["email"])
       end
+      it 'does not redirect' do
+        expect(credentials_instance).not_to have_received(:redirect_to)
+      end
+
     end
 
     context 'when the JWT has expired' do
@@ -70,13 +79,15 @@ RSpec.describe JWTCredentials do
       it 'calls request_jwt' do
         expect(credentials_instance).to have_received(:request_jwt)
       end
+      it 'does not redirect' do
+        expect(credentials_instance).not_to have_received(:redirect_to)
+      end
     end
 
     context 'when the JWT is invalid' do
       let(:cookies) { { aker_user_jwt: invalid_jwt } }
 
       before do
-        allow(credentials_instance).to receive(:redirect_to)
         allow(cookies).to receive(:delete)
         credentials_instance.check_credentials
       end
@@ -108,7 +119,63 @@ RSpec.describe JWTCredentials do
       it 'calls request_jwt' do
         expect(credentials_instance).to have_received(:request_jwt)
       end
+      it 'does not redirect' do
+        expect(credentials_instance).not_to have_received(:redirect_to)
+      end
     end
+
+    context 'when there is no auth session and no JWT' do
+      before do
+        allow(credentials_instance).to receive(:request_jwt)
+        credentials_instance.check_credentials
+      end
+      it 'redirects to the login page' do
+        expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
+      end
+    end
+
+    context 'when credentials are skipped' do
+      context 'when they are fully skipped' do
+        before do
+          CredentialsClass.skip_credentials
+        end
+        it 'does not redirect' do
+          credentials_instance.check_credentials
+          expect(credentials_instance).not_to have_received(:redirect_to)
+        end
+      end
+      context 'when they are skipped only for certain actions' do
+        before do
+          CredentialsClass.skip_credentials(only: [:alpha])
+        end
+        it 'does not redirect the listed action' do
+          credentials_instance.action_name = 'alpha'
+          credentials_instance.check_credentials
+          expect(credentials_instance).not_to have_received(:redirect_to)
+        end
+        it 'redirects unlisted actions' do
+          credentials_instance.action_name = 'beta'
+          credentials_instance.check_credentials
+          expect(credentials_instance).to have_received(:redirect_to)
+        end
+      end
+      context 'when they are skipped except for certain actions' do
+        before do
+          CredentialsClass.skip_credentials(except: [:alpha])
+        end
+        it 'does not redirect unlisted actions' do
+          credentials_instance.action_name = 'beta'
+          credentials_instance.check_credentials
+          expect(credentials_instance).not_to have_received(:redirect_to)
+        end
+        it 'redirects listed actions' do
+          credentials_instance.action_name = 'alpha'
+          credentials_instance.check_credentials
+          expect(credentials_instance).to have_received(:redirect_to)
+        end
+      end
+    end
+
   end
 
   describe(:request_jwt) do

@@ -11,6 +11,23 @@ module JWTCredentials
     base.instance_eval do |klass|
       before_action :check_credentials
       before_action :apply_credentials
+
+      def self.skip_credentials?(action)
+        return false unless @skip_credentials
+        return true unless @skip_credentials_options
+        if @skip_credentials_options[:only]
+          return @skip_credentials_options[:only].include?(action)
+        end
+        if @skip_credentials_options[:except]
+          return !@skip_credentials_options[:except].include?(action)
+        end
+        return true
+      end
+
+      def self.skip_credentials(options=nil)
+        @skip_credentials = true
+        @skip_credentials_options = options
+      end
     end
   end
 
@@ -38,6 +55,7 @@ module JWTCredentials
 
   def check_credentials
     @x_auth_user = nil
+    return if self.class.skip_credentials?(self.action_name.to_sym)
     if request.headers.to_h['HTTP_X_AUTHORISATION']
       # JWT present in header (microservices or current SSO)
       begin
