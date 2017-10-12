@@ -43,9 +43,9 @@ module JWTCredentials
       begin
         user_from_jwt(request.headers.to_h['HTTP_X_AUTHORISATION'])
       rescue JWT::VerificationError => e
-        render body: nil, status: :unauthorized
+        head :unauthorized
       rescue JWT::ExpiredSignature => e
-        render body: nil, status: :unauthorized
+        head :unauthorized
       end
     elsif cookies[:aker_user_jwt]
       # JWT present in cookie (front-end services on new SSO)
@@ -65,6 +65,8 @@ module JWTCredentials
     elsif default_user
       # Fake JWT User for development
       build_user(default_user)
+    elsif cookies[:aker_auth_session]
+      request_jwt
     else
       redirect_to login_url
     end
@@ -80,6 +82,10 @@ module JWTCredentials
   end
 
   def request_jwt
+    unless cookies[:aker_auth_session]
+      redirect_to login_url
+      return
+    end
     # Request a new JWT from the auth service
     conn = Faraday.new(url: auth_service_url)
     auth_response = conn.post do |req|
@@ -95,9 +101,9 @@ module JWTCredentials
       begin
         user_from_jwt(coded_jwt)
       rescue JWT::VerificationError => e
-        render body: nil, status: :unauthorized
+        head :unauthorized
       rescue JWT::ExpiredSignature => e
-        render body: nil, status: :unauthorized
+        head :unauthorized
       end
     else
       redirect_to login_url

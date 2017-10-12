@@ -64,11 +64,11 @@ RSpec.describe JWTCredentials do
         allow(credentials_instance).to receive(:request_jwt)
         credentials_instance.check_credentials
       end
-      it 'calls request_jwt' do
-        expect(credentials_instance).to have_received(:request_jwt)
-      end
       it 'does not store the user' do
         expect(credentials_instance.x_auth_user).to be_nil
+      end
+      it 'calls request_jwt' do
+        expect(credentials_instance).to have_received(:request_jwt)
       end
     end
 
@@ -95,11 +95,26 @@ RSpec.describe JWTCredentials do
       end
     end
 
+    context 'when the user has an auth session but no JWT' do
+      let(:cookies) { { aker_auth_session: 'some_session_id' } }
+
+      before do
+        allow(credentials_instance).to receive(:request_jwt)
+        credentials_instance.check_credentials
+      end
+      it 'does not store the user' do
+        expect(credentials_instance.x_auth_user).to be_nil
+      end
+      it 'calls request_jwt' do
+        expect(credentials_instance).to have_received(:request_jwt)
+      end
+    end
   end
 
   describe(:request_jwt) do
     let(:conn) { double("Faraday") }
     let(:cookie_data) { '[cookie data]'}
+    let(:auth_status) { 200 }
     let(:auth_response) { double('auth response', status: auth_status, body: valid_jwt, headers: { 'set-cookie' => cookie_data}) }
     let(:response) { double('response', headers: headers)}
     let(:headers) { {} }
@@ -111,22 +126,33 @@ RSpec.describe JWTCredentials do
       credentials_instance.request_jwt
     end
 
-    context 'when the request succeeds' do
-      let(:auth_status) { 200 }
+    context 'when the user has an auth session cookie' do
+      let(:cookies) { { aker_auth_session: 'auth_session' } }
 
-      it 'sends back a cookie' do
-        expect(headers['set-cookie']).to eq(cookie_data)
+      context 'when the request succeeds' do
+        it 'sends back a cookie' do
+          expect(headers['set-cookie']).to eq(cookie_data)
+        end
+
+        it 'processes the jwt' do
+          expect(credentials_instance.x_auth_user).not_to be_nil
+          expect(credentials_instance.x_auth_user.email).to eq(userhash['email'])
+        end
       end
 
-      it 'processes the jwt' do
-        expect(credentials_instance.x_auth_user).not_to be_nil
-        expect(credentials_instance.x_auth_user.email).to eq(userhash['email'])
+      context 'when the request fails' do
+        let(:auth_status) { 401 }
+
+        it 'does not send back a cookie' do
+          expect(headers['set-cookie']).to be_nil
+        end
+
+        it 'redirects to the login page' do
+          expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
+        end
       end
     end
-
-    context 'when the request fails' do
-      let(:auth_status) { 401 }
-
+    context 'when the user has no auth session cookie' do
       it 'does not send back a cookie' do
         expect(headers['set-cookie']).to be_nil
       end
@@ -135,6 +161,5 @@ RSpec.describe JWTCredentials do
         expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
       end
     end
-
   end
 end
