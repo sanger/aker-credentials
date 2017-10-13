@@ -2,6 +2,7 @@ require 'jwt'
 require 'ostruct'
 require 'request_store'
 require 'jwt_serializer'
+require 'faraday'
 require 'active_support'
 require 'active_support/core_ext'
 
