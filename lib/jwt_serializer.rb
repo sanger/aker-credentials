@@ -1,6 +1,7 @@
 require 'jwt'
 require 'request_store'
 require 'ostruct'
+require 'faraday'
 
 class JWTSerializer < Faraday::Middleware
 
