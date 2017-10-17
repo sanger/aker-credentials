@@ -101,32 +101,29 @@ module JWTCredentials
   end
 
   def request_jwt
-    unless cookies[:aker_auth_session]
-      redirect_to login_url
-      return
+    begin
+      success = renew_jwt(cookies[:aker_auth_session])
+    rescue
+      success = false
     end
-    # Request a new JWT from the auth service
+    unless success
+      redirect_to login_url
+    end
+  end
+
+  # This method may return nil or throw an exception if some part of it fails
+  def renew_jwt(auth_session)
+    return nil unless auth_session
     conn = Faraday.new(url: auth_service_url)
     auth_response = conn.post do |req|
-      req.url '/renew_jwt'
-      req.headers['Cookie'] = "aker_auth_session=#{cookies[:aker_auth_session]}"
-    end
-    if auth_response.status == 200
-      # Update the JWT Cookie to contain the new JWT
-      # Ensures cookies returned by request to auth service are actually set
-      response.headers['set-cookie'] = auth_response.headers['set-cookie']
-      # Read the jwt from the auth response and carry on with the original request
-      coded_jwt = auth_response.body
-      begin
-        user_from_jwt(coded_jwt)
-      rescue JWT::VerificationError => e
-        head :unauthorized
-      rescue JWT::ExpiredSignature => e
-        head :unauthorized
-      end
-    else
-      redirect_to login_url
-    end
+      req.url = '/renew_jwt'
+      req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
+    end # may throw an exception for some response statuses
+    return nil unless auth_response.status==200
+    user_from_jwt(auth_response.body) # may throw an exception if jwt is invalid or expired
+    # send the new cookie back to the user
+    response.headers['set-cookie'] = auth_response.headers['set-cookie']
+    auth_response.body
   end
 
   def login_url

@@ -185,11 +185,16 @@ RSpec.describe JWTCredentials do
     let(:auth_response) { double('auth response', status: auth_status, body: valid_jwt, headers: { 'set-cookie' => cookie_data}) }
     let(:response) { double('response', headers: headers)}
     let(:headers) { {} }
+    let(:auth_error) { nil }
     before do
       allow(credentials_instance).to receive(:redirect_to)
       allow(credentials_instance).to receive(:response).and_return(response)
       allow(Faraday).to receive(:new).and_return(conn)
-      allow(conn).to receive(:post).and_return(auth_response)
+      if auth_error
+        allow(conn).to receive(:post).and_raise(auth_error)
+      else
+        allow(conn).to receive(:post).and_return(auth_response)
+      end
       credentials_instance.request_jwt
     end
 
@@ -209,6 +214,18 @@ RSpec.describe JWTCredentials do
 
       context 'when the request fails' do
         let(:auth_status) { 401 }
+
+        it 'does not send back a cookie' do
+          expect(headers['set-cookie']).to be_nil
+        end
+
+        it 'redirects to the login page' do
+          expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
+        end
+      end
+
+      context 'when the request raises' do
+        let(:auth_error) { 'Error' }
 
         it 'does not send back a cookie' do
           expect(headers['set-cookie']).to be_nil
