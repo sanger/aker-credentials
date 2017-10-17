@@ -114,9 +114,8 @@ module JWTCredentials
   # This method may return nil or throw an exception if some part of it fails
   def renew_jwt(auth_session)
     return nil unless auth_session
-    conn = Faraday.new(url: auth_service_url)
+    conn = Faraday.new(url: renew_url)
     auth_response = conn.post do |req|
-      req.url = '/renew_jwt'
       req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
     end # may throw an exception for some response statuses
     return nil unless auth_response.status==200
@@ -145,8 +144,8 @@ module JWTCredentials
     Rails.configuration.jwt_secret_key
   end
 
-  def auth_service_url
-    Rails.configuration.auth_service_url
+  def renew_url
+    Rails.configuration.auth_service_url+"/renew_jwt"
   end
 
 end
