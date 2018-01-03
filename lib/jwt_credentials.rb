@@ -7,7 +7,6 @@ require 'active_support'
 require 'active_support/core_ext'
 
 module JWTCredentials
-
   def self.included(base)
     base.instance_eval do |klass|
       before_action :check_credentials
@@ -25,7 +24,7 @@ module JWTCredentials
         return true
       end
 
-      def self.skip_credentials(options=nil)
+      def self.skip_credentials(options = nil)
         @skip_credentials = true
         @skip_credentials_options = options
       end
@@ -58,7 +57,7 @@ module JWTCredentials
     @x_auth_user = nil
     return if self.class.skip_credentials?(self.action_name.to_sym)
     if request.headers.to_h['HTTP_X_AUTHORISATION']
-      # JWT present in header (microservices or current SSO)
+      # JWT present in header (microservices)
       begin
         user_from_jwt(request.headers.to_h['HTTP_X_AUTHORISATION'])
       rescue JWT::VerificationError => e
@@ -67,7 +66,7 @@ module JWTCredentials
         head :unauthorized
       end
     elsif cookies[:aker_user_jwt]
-      # JWT present in cookie (front-end services on new SSO)
+      # JWT present in cookie (front-end apps)
       begin
         user_from_jwt(cookies[:aker_user_jwt])
       rescue JWT::VerificationError => e
@@ -96,7 +95,7 @@ module JWTCredentials
   end
 
   def user_from_jwt(jwt_container)
-    payload, header = JWT.decode jwt_container, secret_key, true, algorithm: 'HS256'
+    payload, _header = JWT.decode jwt_container, secret_key, true, algorithm: 'HS256'
     build_user(payload['data'])
   end
 
@@ -118,7 +117,7 @@ module JWTCredentials
     auth_response = conn.post do |req|
       req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
     end # may throw an exception for some response statuses
-    return nil unless auth_response.status==200
+    return nil unless auth_response.status == 200
     user_from_jwt(auth_response.body) # may throw an exception if jwt is invalid or expired
     # send the new cookie back to the user
     response.headers['set-cookie'] = auth_response.headers['set-cookie']
@@ -129,7 +128,7 @@ module JWTCredentials
     params = {
       redirect_url: request.original_url
     }
-    Rails.configuration.login_url+'?'+params.to_query
+    Rails.configuration.login_url + '?' + params.to_query
   end
 
   def default_user
@@ -145,7 +144,6 @@ module JWTCredentials
   end
 
   def renew_url
-    Rails.configuration.auth_service_url+"/renew_jwt"
+    Rails.configuration.auth_service_url + '/renew_jwt'
   end
-
 end
