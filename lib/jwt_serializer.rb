@@ -3,6 +3,8 @@ require 'request_store'
 require 'ostruct'
 require 'faraday'
 
+# This is only used for generating JWTs for services to communicate with each
+# other, NOT for the JWT stored in a cookie.
 class JWTSerializer < Faraday::Middleware
   JWT_NBF_TIME = 60
   JWT_EXP_TIME = 120
