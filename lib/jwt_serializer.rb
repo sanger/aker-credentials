@@ -5,6 +5,7 @@ require 'faraday'
 
 class JWTSerializer < Faraday::Middleware
   JWT_NBF_TIME = 60
+  JWT_EXP_TIME = 120
 
   def call(env)
     user_info = RequestStore.store[:x_authorisation]
@@ -24,7 +25,7 @@ class JWTSerializer < Faraday::Middleware
       auth_hash = auth_hash.to_jwt_data
     end
     secret_key = Rails.application.config.jwt_secret_key
-    exp = Time.now.to_i + Rails.application.config.jwt_exp_time
+    exp = Time.now.to_i + JWT_EXP_TIME
     nbf = Time.now.to_i - JWT_NBF_TIME
 
     payload = { data: auth_hash, exp: exp, nbf: nbf }
