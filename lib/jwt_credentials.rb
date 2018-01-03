@@ -57,7 +57,7 @@ module JWTCredentials
     @x_auth_user = nil
     return if self.class.skip_credentials?(self.action_name.to_sym)
     if request.headers.to_h['HTTP_X_AUTHORISATION']
-      # JWT present in header (microservices or current SSO)
+      # JWT present in header (microservices)
       begin
         user_from_jwt(request.headers.to_h['HTTP_X_AUTHORISATION'])
       rescue JWT::VerificationError => e
@@ -66,7 +66,7 @@ module JWTCredentials
         head :unauthorized
       end
     elsif cookies[:aker_user_jwt]
-      # JWT present in cookie (front-end services on new SSO)
+      # JWT present in cookie (front-end apps)
       begin
         user_from_jwt(cookies[:aker_user_jwt])
       rescue JWT::VerificationError => e
