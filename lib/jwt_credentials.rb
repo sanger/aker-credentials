@@ -67,6 +67,7 @@ module JWTCredentials
       end
     elsif cookies[:aker_user_jwt]
       # JWT present in cookie (front-end apps)
+      Rails.logger.info("JWT in cookie: #{cookies[:aker_user_jwt]}")
       begin
         user_from_jwt(cookies[:aker_user_jwt])
       rescue JWT::VerificationError => e
@@ -78,6 +79,7 @@ module JWTCredentials
         cookies.delete :aker_user_jwt
         redirect_to login_url
       rescue JWT::ExpiredSignature => e
+        Rails.logger.info("EXPIRED JWT in cookie: #{cookies[:aker_user_jwt]}")
         request_jwt
       end
     elsif default_user
@@ -101,22 +103,26 @@ module JWTCredentials
 
   def request_jwt
     begin
+      Rails.logger.info("About to attmpt to renew JWT")
       success = renew_jwt(cookies[:aker_auth_session])
     rescue
       success = false
     end
     unless success
+      Rails.logger.info("Request failed, redirect to login page")
       redirect_to login_url
     end
   end
 
   # This method may return nil or throw an exception if some part of it fails
   def renew_jwt(auth_session)
+    Rails.logger.info("Auth session ID: #{auth_session}")
     return nil unless auth_session
     conn = Faraday.new(url: renew_url)
     auth_response = conn.post do |req|
       req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
     end # may throw an exception for some response statuses
+    Rails.logger.info("Auth service response to renewal attempt: #{auth_response}")
     return nil unless auth_response.status == 200
     user_from_jwt(auth_response.body) # may throw an exception if jwt is invalid or expired
     # send the new cookie back to the user
