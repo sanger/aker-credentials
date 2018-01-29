@@ -118,10 +118,17 @@ module JWTCredentials
   def renew_jwt(auth_session)
     Rails.logger.info("Auth session ID: #{auth_session}")
     return nil unless auth_session
-    conn = Faraday.new(url: renew_url)
-    auth_response = conn.post do |req|
-      req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
-    end # may throw an exception for some response statuses
+    Rails.logger.info("JWT Renewal URL: #{renew_url}")
+    begin
+      conn = Faraday.new(url: renew_url)
+      auth_response = conn.post do |req|
+        req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
+      end # may throw an exception for some response statuses
+    rescue => error
+      puts error.message
+      puts error.backtracks
+    end
+
     Rails.logger.info("Auth service response to renewal attempt: #{auth_response}")
     return nil unless auth_response.status == 200
     user_from_jwt(auth_response.body) # may throw an exception if jwt is invalid or expired
