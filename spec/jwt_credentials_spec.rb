@@ -4,7 +4,7 @@ require 'active_support'
 require 'active_support/core_ext'
 
 RSpec.describe JWTCredentials do
-  let(:rails) { double('Rails', logger: logger, configuration: config) }
+  let(:rails) { double('Rails', logger: logger, configuration: config, env: 'test') }
   let(:logger) do
     log = double('Logger')
     allow(log).to receive(:warn)
@@ -54,7 +54,7 @@ RSpec.describe JWTCredentials do
 
   describe(:check_credentials) do
     context 'when the JWT is valid' do
-      let(:cookies) { { aker_user_jwt: valid_jwt } }
+      let(:cookies) { { "aker_jwt_#{rails.env}": valid_jwt } }
       it 'extracts the user' do
         credentials_instance.check_credentials
         x = credentials_instance.x_auth_user
@@ -68,7 +68,7 @@ RSpec.describe JWTCredentials do
     end
 
     context 'when the JWT has expired' do
-      let(:cookies) { { aker_user_jwt: expired_jwt } }
+      let(:cookies) { { "aker_jwt_#{rails.env}": expired_jwt } }
       before do
         allow(credentials_instance).to receive(:request_jwt)
         credentials_instance.check_credentials
@@ -85,7 +85,7 @@ RSpec.describe JWTCredentials do
     end
 
     context 'when the JWT is invalid' do
-      let(:cookies) { { aker_user_jwt: invalid_jwt } }
+      let(:cookies) { { "aker_jwt_#{rails.env}": invalid_jwt } }
 
       before do
         allow(cookies).to receive(:delete)
@@ -98,8 +98,8 @@ RSpec.describe JWTCredentials do
         expect(credentials_instance).to have_received(:redirect_to).with(login_url_with_parameters)
       end
       it 'deletes the cookies' do
-        expect(cookies).to have_received(:delete).with(:aker_auth_session)
-        expect(cookies).to have_received(:delete).with(:aker_user_jwt)
+        expect(cookies).to have_received(:delete).with(:"aker_auth_#{rails.env}")
+        expect(cookies).to have_received(:delete).with(:"aker_jwt_#{rails.env}")
       end
       it 'does not store the user' do
         expect(credentials_instance.x_auth_user).to be_nil
@@ -107,7 +107,7 @@ RSpec.describe JWTCredentials do
     end
 
     context 'when the user has an auth session but no JWT' do
-      let(:cookies) { { aker_auth_session: 'some_session_id' } }
+      let(:cookies) { { "aker_auth_#{rails.env}": 'some_session_id' } }
 
       before do
         allow(credentials_instance).to receive(:request_jwt)
@@ -199,7 +199,7 @@ RSpec.describe JWTCredentials do
     end
 
     context 'when the user has an auth session cookie' do
-      let(:cookies) { { aker_auth_session: 'auth_session' } }
+      let(:cookies) { { "aker_auth_#{rails.env}": 'auth_session' } }
 
       context 'when the request succeeds' do
         it 'sends back a cookie' do
