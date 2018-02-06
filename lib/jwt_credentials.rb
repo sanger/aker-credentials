@@ -65,17 +65,17 @@ module JWTCredentials
       rescue JWT::ExpiredSignature => e
         head :unauthorized
       end
-    elsif cookies[:aker_user_jwt]
+    elsif cookies[:"aker_jwt_#{env}"]
       # JWT present in cookie (front-end apps)
       begin
-        user_from_jwt(cookies[:aker_user_jwt])
+        user_from_jwt(cookies[:"aker_jwt_#{env}"])
       rescue JWT::VerificationError => e
         # Potential hacking attempt so log this
-        jwt = JWT.decode cookies[:aker_user_jwt], '', false, algorithm: 'HS256'
+        jwt = JWT.decode cookies[:"aker_jwt_#{env}"], '', false, algorithm: 'HS256'
         Rails.logger.warn("JWT verification failed from #{request.ip}, JWT: #{jwt}")
         # Then delete their cookies
-        cookies.delete :aker_auth_session
-        cookies.delete :aker_user_jwt
+        cookies.delete :"aker_auth_#{env}"
+        cookies.delete :"aker_jwt_#{env}"
         redirect_to login_url
       rescue JWT::ExpiredSignature => e
         request_jwt
@@ -83,7 +83,7 @@ module JWTCredentials
     elsif default_user
       # Fake JWT User for development
       build_user(default_user)
-    elsif cookies[:aker_auth_session]
+    elsif cookies[:"aker_auth_#{env}"]
       request_jwt
     else
       redirect_to login_url
@@ -101,7 +101,7 @@ module JWTCredentials
 
   def request_jwt
     begin
-      success = renew_jwt(cookies[:aker_auth_session])
+      success = renew_jwt(cookies[:"aker_auth_#{env}"])
     rescue
       success = false
     end
@@ -115,7 +115,7 @@ module JWTCredentials
     return nil unless auth_session
     conn = Faraday.new(url: renew_url)
     auth_response = conn.post do |req|
-      req.headers['Cookie'] = "aker_auth_session=#{auth_session}"
+      req.headers['Cookie'] = "aker_auth_#{env}=#{auth_session}"
     end # may throw an exception for some response statuses
     return nil unless auth_response.status == 200
     user_from_jwt(auth_response.body) # may throw an exception if jwt is invalid or expired
@@ -146,4 +146,9 @@ module JWTCredentials
   def renew_url
     Rails.configuration.auth_service_url + '/renew_jwt'
   end
+
+  def env
+    Rails.env
+  end
+
 end
