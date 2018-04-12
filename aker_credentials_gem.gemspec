@@ -4,7 +4,7 @@ $LOAD_PATH.unshift(lib) unless $LOAD_PATH.include?(lib)
 require 'aker_credentials_gem/version'
 
 Gem::Specification.new do |spec|
-  spec.name          = "aker_credentials"
+  spec.name          = "aker_credentials_gem"
   spec.version       = AkerCredentialsGem::VERSION
   spec.authors       = ["Eduardo Martin Rojo"]
   spec.email         = ["emr@sanger.ac.uk"]
