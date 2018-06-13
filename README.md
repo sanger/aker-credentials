@@ -1,4 +1,8 @@
-# AkerCredentialsGem
+# Aker - Credentials gem
+
+[![Build Status](https://travis-ci.org/sanger/aker-credentials-gem.svg?branch=master)](https://travis-ci.org/sanger/aker-credentials-gem)
+[![Maintainability](https://api.codeclimate.com/v1/badges/7292060c2b89a7e9c1c4/maintainability)](https://codeclimate.com/github/sanger/aker-credentials-gem/maintainability)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/7292060c2b89a7e9c1c4/test_coverage)](https://codeclimate.com/github/sanger/aker-credentials-gem/test_coverage)
 
 Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/aker_credentials_gem`. To experiment with that code, run `bin/console` for an interactive prompt.
 
@@ -33,4 +37,3 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/aker_credentials_gem.
-
